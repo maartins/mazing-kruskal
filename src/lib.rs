@@ -3,6 +3,7 @@ use std::fmt;
 use rand::seq::SliceRandom;
 use std::io;
 use std::io::prelude::*;
+use std::time::{Duration, Instant};
 
 const WALL: u8 = 1;
 const GROUND: u8 = 0;
@@ -138,71 +139,79 @@ fn join_sides(side: &Pos, center: &Pos, opposite: &Pos, map: &mut Vec<Vec<Cell>>
 }
 
 pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
-    let mut map = vec![vec![Cell::new(0, 0, GROUND, 0); config.size]; config.size];
-    let mut walls = Vec::new();
+    for _ in 0..config.count {
+        let code_start_time = Instant::now();
+        let mut map = vec![vec![Cell::new(0, 0, GROUND, 0); config.size]; config.size];
+        let mut walls = Vec::new();
 
-    let mut counter: usize = 1;
-    for y in 0..map.len() {
-        for x in 0..map.len() {
-            map[y][x].pos.x = x as isize;
-            map[y][x].pos.y = y as isize;
+        let mut counter: usize = 1;
+        for y in 0..map.len() {
+            for x in 0..map.len() {
+                map[y][x].pos.x = x as isize;
+                map[y][x].pos.y = y as isize;
 
-            if x & 1 == 1 || y & 1 == 1 {
-                map[y][x].cell_type = WALL;
-            } else {
-                map[y][x].cell_type = GROUND;
-                map[y][x].id = counter;
-            }
-
-            counter += 1;
-        }
-    }
-
-    for row in map.iter() {
-        for cell in row.iter() {
-            if cell.cell_type == WALL {
-                walls.push(cell.clone());
-            }
-        }
-    }
-
-    match config.mode {
-        Mode::Verbose => {
-            while walls.len() != 0 {
-                walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut map);
-            }
-    
-            for (_, row) in map.iter().enumerate() {
-                for (_, col) in row.iter().enumerate() {
-                    print!("{}", col);
+                if x & 1 == 1 || y & 1 == 1 {
+                    map[y][x].cell_type = WALL;
+                } else {
+                    map[y][x].cell_type = GROUND;
+                    map[y][x].id = counter;
                 }
-                println!()
+
+                counter += 1;
             }
-        },
-        Mode::ComputerStep => {
-            while walls.len() != 0 {
-                walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut map);
+        }
+
+        for row in map.iter() {
+            for cell in row.iter() {
+                if cell.cell_type == WALL {
+                    walls.push(cell.clone());
+                }
+            }
+        }
+
+        match config.mode {
+            Mode::Verbose => {
+                while walls.len() != 0 {
+                    walls.shuffle(&mut rand::thread_rng());
+                    join_cells(&walls.pop().unwrap(), &mut map);
+                }
+        
                 for (_, row) in map.iter().enumerate() {
                     for (_, col) in row.iter().enumerate() {
                         print!("{}", col);
                     }
-                    println!()
+                    println!();
                 }
-                pause();
-            }
-        },
-        Mode::Computer => {
-            while walls.len() != 0 {
-                walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut map);
-            }
-    
-            for (_, row) in map.iter().enumerate() {
-                for (_, col) in row.iter().enumerate() {
-                    print!("{}", col);
+                println!("-------------");
+                println!("Time run: {}", code_start_time.elapsed().as_millis());
+            },
+            Mode::ComputerStep => {
+                while walls.len() != 0 {
+                    walls.shuffle(&mut rand::thread_rng());
+                    join_cells(&walls.pop().unwrap(), &mut map);
+                    for (_, row) in map.iter().enumerate() {
+                        for (_, col) in row.iter().enumerate() {
+                            print!("{}", col);
+                        }
+                        println!();
+                    }
+                    pause();
                 }
+                println!("-------------");
+                println!("Time run: {}", code_start_time.elapsed().as_millis());
+            },
+            Mode::Computer => {
+                while walls.len() != 0 {
+                    walls.shuffle(&mut rand::thread_rng());
+                    join_cells(&walls.pop().unwrap(), &mut map);
+                }
+        
+                for (_, row) in map.iter().enumerate() {
+                    for (_, col) in row.iter().enumerate() {
+                        print!("{}", col);
+                    }
+                }
+                println!();
             }
         }
     }
