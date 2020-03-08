@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::fmt;
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 const WALL: u8 = 1;
 const GROUND: u8 = 0;
@@ -43,11 +44,11 @@ struct Cell {
     pub x: usize,
     pub y: usize,
     pub cell_type: u8,
-    pub id: String,
+    pub id: u8,
 }
 
 impl Cell {
-    fn new(x: usize, y: usize, cell_type: u8, id: String) -> Cell {
+    fn new(x: usize, y: usize, cell_type: u8, id: u8) -> Cell {
         Cell {
             x,
             y,
@@ -59,30 +60,81 @@ impl Cell {
 
 impl fmt::Display for Cell {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.id != "z".to_string() {
-            write!(f, "{}", self.id)
+        if self.id != 0 {
+            write!(f, "_")
         } else {
             write!(f, "#")
         }
     }
 }
 
-pub fn run (config: Config) -> Result<(), Box<dyn Error>>{
-    let mut map = vec![vec![Cell::new(0, 0, GROUND, "z".to_string()); config.size]; config.size];
+fn join_cells(wall: &Cell, map: &mut Vec<Vec<Cell>>) {
+    let mut top: Option<u8> = None;
+    let mut bottom: Option<u8> = None;
+    let mut right: Option<u8> = None;
+    let mut left: Option<u8> = None;
 
-    for x in 0..config.size {
-        for y in 0..config.size {
-            map[x][y].x = x;
-            map[x][y].y = y;
+    if wall.y as i8 - 1 >= 0 {
+        top = Some(1);
+    }
+    if wall.y + 1 <= map.len() - 1 {
+        bottom = Some(1);
+    }
+    if wall.x + 1 <= map.len() - 1 {
+        right = Some(1);
+    }
+    if wall.x as i8 - 1 >= 0 {
+        left = Some(1);
+    }
+
+    if let Some(1) = top {
+        if let Some(1) = bottom {
+            let new_id = map[wall.y - 1][wall.x].id;
+            map[wall.y][wall.x].id = new_id;
+            map[wall.y + 1][wall.x].id = new_id;
+        }
+    }
+    if let Some(1) = right {
+        if let Some(1) = left {
+            let new_id = map[wall.y][wall.x - 1].id;
+            map[wall.y][wall.x].id = new_id;
+            map[wall.y][wall.x + 1].id = new_id;
+        }
+    }
+}
+
+pub fn run (config: Config) -> Result<(), Box<dyn Error>>{
+    let mut map = vec![vec![Cell::new(0, 0, GROUND, 0); config.size]; config.size];
+    let mut walls = Vec::new();
+
+    let mut counter = 1;
+    for y in 0..config.size {
+        for x in 0..config.size {
+            map[y][x].x = x;
+            map[y][x].y = y;
 
             if x & 1 == 1 || y & 1 == 1 {
-                map[x][y].cell_type = WALL;
-                map[x][y].id = "z".to_string();
+                map[y][x].cell_type = WALL;
             } else {
-                map[x][y].cell_type = GROUND;
-                map[x][y].id = "a".to_string();
+                map[y][x].cell_type = GROUND;
+                map[y][x].id = counter;
+            }
+
+            counter += 1;
+        }
+    }
+
+    for row in map.iter() {
+        for cell in row.iter() {
+            if cell.cell_type == WALL {
+                walls.push(cell.clone());
             }
         }
+    }
+
+    while walls.len() != 0 {
+        walls.shuffle(&mut rand::thread_rng());
+        join_cells(&walls.pop().unwrap(), &mut map);
     }
 
     for (_, row) in map.iter().enumerate() {
