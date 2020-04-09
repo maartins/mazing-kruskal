@@ -3,7 +3,9 @@ use std::fmt;
 use rand::seq::SliceRandom;
 use std::io;
 use std::io::prelude::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
+use std::fs::OpenOptions;
+use std::fs::File;
 
 const WALL: u8 = 1;
 const GROUND: u8 = 0;
@@ -27,6 +29,7 @@ impl Config {
             "c" => Mode::Computer,
             "cs" => Mode::ComputerStep,
             "v" => Mode::Verbose,
+            "p" => Mode::Print,
             _ => return Err("not a valid mode")
         };
 
@@ -54,22 +57,21 @@ impl Config {
 pub enum Mode {
     Computer,
     ComputerStep,
-    Verbose
+    Verbose,
+    Print
 }
 
 #[derive(Clone, Debug)]
 struct Cell {
     pub pos: Pos,
     pub cell_type: u8,
-    pub id: usize,
+    pub id: usize
 }
 
 impl Cell {
     fn new(x: isize, y: isize, cell_type: u8, id: usize) -> Cell {
-        let pos = Pos{x , y};
-
         Cell {
-            pos,
+            pos: Pos{x , y},
             cell_type,
             id
         }
@@ -139,6 +141,14 @@ fn join_sides(side: &Pos, center: &Pos, opposite: &Pos, map: &mut Vec<Vec<Cell>>
 }
 
 pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
+    match config.mode {
+        Mode::Print => {
+            File::create("mazes.txt")?;
+        }
+        _ => {}
+    }
+
+    let start_time = Instant::now();
     for _ in 0..config.count {
         let code_start_time = Instant::now();
         let mut map = vec![vec![Cell::new(0, 0, GROUND, 0); config.size]; config.size];
@@ -147,25 +157,16 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         let mut counter: usize = 1;
         for y in 0..map.len() {
             for x in 0..map.len() {
-                map[y][x].pos.x = x as isize;
-                map[y][x].pos.y = y as isize;
+                map[y][x].pos = Pos{x: x as isize, y: y as isize};
 
                 if x & 1 == 1 || y & 1 == 1 {
                     map[y][x].cell_type = WALL;
+                    walls.push(map[y][x].clone());
                 } else {
-                    map[y][x].cell_type = GROUND;
                     map[y][x].id = counter;
                 }
 
                 counter += 1;
-            }
-        }
-
-        for row in map.iter() {
-            for cell in row.iter() {
-                if cell.cell_type == WALL {
-                    walls.push(cell.clone());
-                }
             }
         }
 
@@ -178,12 +179,12 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         
                 for (_, row) in map.iter().enumerate() {
                     for (_, col) in row.iter().enumerate() {
-                        print!("{}", col);
+                        print!(".{}", col);
                     }
                     println!();
                 }
                 println!("-------------");
-                println!("Time run: {}", code_start_time.elapsed().as_millis());
+                println!("Time run: {}ms", code_start_time.elapsed().as_millis());
             },
             Mode::ComputerStep => {
                 while walls.len() != 0 {
@@ -191,14 +192,14 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
                     join_cells(&walls.pop().unwrap(), &mut map);
                     for (_, row) in map.iter().enumerate() {
                         for (_, col) in row.iter().enumerate() {
-                            print!("{}", col);
+                            print!(".{}", col);
                         }
                         println!();
                     }
                     pause();
                 }
                 println!("-------------");
-                println!("Time run: {}", code_start_time.elapsed().as_millis());
+                println!("Time run: {}ms", code_start_time.elapsed().as_millis());
             },
             Mode::Computer => {
                 while walls.len() != 0 {
@@ -213,8 +214,25 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
                 }
                 println!();
             }
+            Mode::Print => {
+                while walls.len() != 0 {
+                    walls.shuffle(&mut rand::thread_rng());
+                    join_cells(&walls.pop().unwrap(), &mut map);
+                }
+
+                let mut file = OpenOptions::new().write(true).append(true).open("mazes.txt").unwrap();
+        
+                for (_, row) in map.iter().enumerate() {
+                    for (_, col) in row.iter().enumerate() {
+                        write!(file, "{}", col.cell_type)?;
+                    }
+                }
+                writeln!(file, "")?;
+                println!("Line written in: {}ms", code_start_time.elapsed().as_millis());
+            }
         }
     }
+    println!("Total time run: {}ms", start_time.elapsed().as_millis());
 
     Ok(())
 }
