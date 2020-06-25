@@ -1,5 +1,6 @@
+mod maze_cell;
+
 use std::error::Error;
-use std::fmt;
 use rand::seq::SliceRandom;
 use std::io;
 use std::io::prelude::*;
@@ -61,56 +62,11 @@ pub enum Mode {
     Print
 }
 
-#[derive(Clone, Debug)]
-struct Cell {
-    pub pos: Pos,
-    pub cell_type: u8,
-    pub id: usize
-}
-
-impl Cell {
-    fn new(x: isize, y: isize, cell_type: u8, id: usize) -> Cell {
-        Cell {
-            pos: Pos{x , y},
-            cell_type,
-            id
-        }
-    }
-
-    fn get_top_pos(&self) -> Pos {
-        Pos{x: self.pos.x, y: self.pos.y - 1}
-    }
-
-    fn get_bottom_pos(&self) -> Pos {
-        Pos{x: self.pos.x, y: self.pos.y + 1}
-    }
-
-    fn get_right_pos(&self) -> Pos {
-        Pos{x: self.pos.x + 1, y: self.pos.y}
-    }
-
-    fn get_left_pos(&self) -> Pos {
-        Pos{x: self.pos.x - 1, y: self.pos.y}
-    }
-}
-
-impl fmt::Display for Cell {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.cell_type)
-    }
-}
-
-#[derive(Clone, Debug)]
-struct Pos {
-    pub x: isize,
-    pub y: isize
-}
-
-fn is_in_bounds(cell: &Pos, length: isize) -> bool {
+fn is_in_bounds(cell: &maze_cell::Pos, length: isize) -> bool {
     (cell.y >= 0 && cell.y <= length - 1) && (cell.x >= 0 && cell.x <= length - 1)
 }
 
-fn join_cells(wall: &Cell, map: &mut Vec<Vec<Cell>>) {
+fn join_cells(wall: &maze_cell::Cell, map: &mut Vec<Vec<maze_cell::Cell>>) {
     let top_pos = wall.get_top_pos();
     let bottom_pos =  wall.get_bottom_pos();
     let right_pos = wall.get_right_pos();
@@ -120,7 +76,7 @@ fn join_cells(wall: &Cell, map: &mut Vec<Vec<Cell>>) {
     join_sides(&left_pos, &wall.pos, &right_pos, map);
 }
 
-fn join_sides(side: &Pos, center: &Pos, opposite: &Pos, map: &mut Vec<Vec<Cell>>) {
+fn join_sides(side: &maze_cell::Pos, center: &maze_cell::Pos, opposite: &maze_cell::Pos, map: &mut Vec<Vec<maze_cell::Cell>>) {
     if is_in_bounds(&side, map.len() as isize) && is_in_bounds(&opposite, map.len() as isize) {
         let new_id = map[side.y as usize][side.x as usize].id;
         let old_id = map[opposite.y as usize][opposite.x as usize].id;
@@ -140,6 +96,16 @@ fn join_sides(side: &Pos, center: &Pos, opposite: &Pos, map: &mut Vec<Vec<Cell>>
     }
 }
 
+fn pause() {
+    let mut stdin = io::stdin();
+    let mut stdout = io::stdout();
+
+    write!(stdout, "Press any key to continue...").unwrap();
+    stdout.flush().unwrap();
+
+    let _ = stdin.read(&mut [0u8]).unwrap();
+}
+
 pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
     match config.mode {
         Mode::Print => {
@@ -150,14 +116,13 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
 
     let start_time = Instant::now();
     for _ in 0..config.count {
-        let code_start_time = Instant::now();
-        let mut map = vec![vec![Cell::new(0, 0, GROUND, 0); config.size]; config.size];
+        let mut map = vec![vec![maze_cell::Cell::new(0, 0, GROUND, 0); config.size]; config.size];
         let mut walls = Vec::new();
 
         let mut counter: usize = 1;
         for y in 0..map.len() {
             for x in 0..map.len() {
-                map[y][x].pos = Pos{x: x as isize, y: y as isize};
+                map[y][x].pos = maze_cell::Pos{x: x as isize, y: y as isize};
 
                 if x & 1 == 1 || y & 1 == 1 {
                     map[y][x].cell_type = WALL;
@@ -170,79 +135,57 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
             }
         }
 
-        match config.mode {
-            Mode::Verbose => {
-                while walls.len() != 0 {
-                    walls.shuffle(&mut rand::thread_rng());
-                    join_cells(&walls.pop().unwrap(), &mut map);
-                }
-        
-                for (_, row) in map.iter().enumerate() {
-                    for (_, col) in row.iter().enumerate() {
-                        print!(".{}", col);
-                    }
-                    println!();
-                }
-                println!("-------------");
-                println!("Time run: {}ms", code_start_time.elapsed().as_millis());
-            },
-            Mode::ComputerStep => {
-                while walls.len() != 0 {
-                    walls.shuffle(&mut rand::thread_rng());
-                    join_cells(&walls.pop().unwrap(), &mut map);
-                    for (_, row) in map.iter().enumerate() {
-                        for (_, col) in row.iter().enumerate() {
-                            print!(".{}", col);
-                        }
-                        println!();
-                    }
-                    pause();
-                }
-                println!("-------------");
-                println!("Time run: {}ms", code_start_time.elapsed().as_millis());
-            },
-            Mode::Computer => {
-                while walls.len() != 0 {
-                    walls.shuffle(&mut rand::thread_rng());
-                    join_cells(&walls.pop().unwrap(), &mut map);
-                }
-        
+        if let Mode::ComputerStep = config.mode {
+            while walls.len() != 0 {
+                walls.shuffle(&mut rand::thread_rng());
+                join_cells(&walls.pop().unwrap(), &mut map);
                 for (_, row) in map.iter().enumerate() {
                     for (_, col) in row.iter().enumerate() {
                         print!("{}", col);
                     }
+                    println!();
                 }
-                println!();
+                pause();
             }
-            Mode::Print => {
-                while walls.len() != 0 {
-                    walls.shuffle(&mut rand::thread_rng());
-                    join_cells(&walls.pop().unwrap(), &mut map);
-                }
+        } else {
+            while walls.len() != 0 {
+                walls.shuffle(&mut rand::thread_rng());
+                join_cells(&walls.pop().unwrap(), &mut map);
+            }
 
-                let mut file = OpenOptions::new().write(true).append(true).open("mazes.txt").unwrap();
-        
-                for (_, row) in map.iter().enumerate() {
-                    for (_, col) in row.iter().enumerate() {
-                        write!(file, "{}", col.cell_type)?;
+            match config.mode {
+                Mode::Verbose => {
+                    for (_, row) in map.iter().enumerate() {
+                        for (_, col) in row.iter().enumerate() {
+                            print!("{}", col);
+                        }
+                        println!();
                     }
+                },
+                Mode::Computer => {
+                    for (_, row) in map.iter().enumerate() {
+                        for (_, col) in row.iter().enumerate() {
+                            print!("{}", col);
+                        }
+                    }
+                    println!();
+                },
+                Mode::ComputerStep => {},
+                Mode::Print => {
+                    let mut file = OpenOptions::new().write(true).append(true).open("mazes.txt").unwrap();
+            
+                    for (_, row) in map.iter().enumerate() {
+                        for (_, col) in row.iter().enumerate() {
+                            write!(file, "{}", col.cell_type)?;
+                        }
+                    }
+                    writeln!(file, "")?;
                 }
-                writeln!(file, "")?;
-                println!("Line written in: {}ms", code_start_time.elapsed().as_millis());
             }
         }
     }
+    println!("Mazes generated: {}", config.count);
     println!("Total time run: {}ms", start_time.elapsed().as_millis());
 
     Ok(())
-}
-
-fn pause() {
-    let mut stdin = io::stdin();
-    let mut stdout = io::stdout();
-
-    write!(stdout, "Press any key to continue...").unwrap();
-    stdout.flush().unwrap();
-
-    let _ = stdin.read(&mut [0u8]).unwrap();
 }
