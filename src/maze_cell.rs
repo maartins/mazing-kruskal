@@ -1,20 +1,22 @@
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Cell {
     pub pos: Pos,
     pub cell_type: u8,
     pub id: usize,
-    pub neighbours: Neighbours
+    pub neighbours: Neighbours,
+    pub parent: Option<Box<Cell>>
 }
 
-impl Cell {
+impl  Cell {
     pub fn new(x: isize, y: isize, cell_type: u8, id: usize) -> Cell {
         Cell {
             pos: Pos{x , y},
             cell_type,
             id,
-            neighbours: Neighbours::new()
+            neighbours: Neighbours::new(),
+            parent: None
         }
     }
 
@@ -55,7 +57,7 @@ pub struct Pos {
     pub y: isize
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Neighbours {
     pub top: Option<Pos>,
     pub bot: Option<Pos>,

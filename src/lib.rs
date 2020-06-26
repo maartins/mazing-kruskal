@@ -1,6 +1,5 @@
 mod maze_cell;
 
-use std::convert::TryInto;
 use std::error::Error;
 use rand::seq::SliceRandom;
 use std::io;
@@ -65,13 +64,15 @@ pub enum Mode {
 
 #[derive(Clone, Debug)]
 pub struct Maze {
-    pub map: Vec<Vec<maze_cell::Cell>>
+    pub map: Vec<Vec<maze_cell::Cell>>,
+    pub size: usize
 }
 
 impl Maze {
     pub fn new(size: usize) -> Maze {
         Maze {
-            map: vec![vec![maze_cell::Cell::new(0, 0, GROUND, 0); size]; size]
+            map: vec![vec![maze_cell::Cell::new(0, 0, GROUND, 0); size]; size],
+            size
         }
     }
 
@@ -83,39 +84,39 @@ impl Maze {
         self.map[pos.y as usize][pos.x as usize].id = cell.id;
         self.map[pos.y as usize][pos.x as usize].cell_type = cell.cell_type;
     }
-}
 
-fn join_cells(wall: &maze_cell::Cell, maze: &mut Maze) {
-    if wall.is_verticaly_bound() {
-        let top = &maze.get_cell(wall.get_top_pos());
-        let bottom = &maze.get_cell(wall.get_bot_pos());
-        join_sides(top, wall, bottom, maze);
+    pub fn join_cells(&mut self, wall: &maze_cell::Cell) {
+        if wall.is_verticaly_bound() {
+            let top = &self.get_cell(wall.get_top_pos());
+            let bottom = &self.get_cell(wall.get_bot_pos());
+            self.join_sides(top, wall, bottom);
+        }
+        if wall.is_horizontaly_bound() {
+            let left = &self.get_cell(wall.get_left_pos());
+            let right = &self.get_cell(wall.get_right_pos());
+            self.join_sides(left, wall, right);
+        }
     }
-    if wall.is_horizontaly_bound() {
-        let left = &maze.get_cell(wall.get_left_pos());
-        let right = &maze.get_cell(wall.get_right_pos());
-        join_sides(left, wall, right, maze);
-    }
-}
 
-/*
-*  ---->
-*  side | center | opposite
-*  
-*  | side
-*  | ---
-*  ▼ center
-*    ---
-*    opposite
-*/
-fn join_sides(side: &maze_cell::Cell, center: &maze_cell::Cell, opposite: &maze_cell::Cell, maze: &mut Maze) {
-    if opposite.id != side.id && opposite.cell_type != WALL && side.cell_type != WALL {
-        maze.set_cell(&center.pos, &side);
-        maze.set_cell(&opposite.pos, &side);
+    /*
+    *  ---->
+    *  side | center | opposite
+    *  
+    *  | side
+    *  | ---
+    *  ▼ center
+    *    ---
+    *    opposite
+    */
+    fn join_sides(&mut self, side: &maze_cell::Cell, center: &maze_cell::Cell, opposite: &maze_cell::Cell) {
+        if opposite.id != side.id && opposite.cell_type != WALL && side.cell_type != WALL {
+            self.set_cell(&center.pos, &side);
+            self.set_cell(&opposite.pos, &side);
 
-        for cell in maze.map.iter_mut().flat_map(|r| r.iter_mut()) {
-            if cell.id == opposite.id {
-                cell.id = side.id;
+            for cell in self.map.iter_mut().flat_map(|r| r.iter_mut()) {
+                if cell.id == opposite.id {
+                    cell.id = side.id;
+                }
             }
         }
     }
@@ -144,11 +145,9 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         let mut maze = Maze::new(config.size);
         let mut walls = Vec::new();
 
-        let map_size: isize = maze.map.len().try_into().unwrap();
-
         let mut counter: usize = 1;
-        for y in 0..maze.map.len() {
-            for x in 0..maze.map.len() {
+        for y in 0..maze.size {
+            for x in 0..maze.size {
                 maze.map[y][x].pos = maze_cell::Pos{x: x as isize, y: y as isize};
 
                 /*
@@ -160,7 +159,7 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
                     if dir == 1 || dir == 3 || dir == 5 || dir == 7 {
                         let n_pos = maze_cell::Pos{x: x as isize + (dir % 3) - 1, y: y as isize + (dir / 3) - 1};
         
-                        if n_pos.x >= 0 && n_pos.x < map_size && n_pos.y >= 0 && n_pos.y < map_size {
+                        if n_pos.x >= 0 && n_pos.x < maze.size as isize && n_pos.y >= 0 && n_pos.y < maze.size as isize {
                             match dir {
                                 1 => { maze.map[y][x].neighbours.top = Some(n_pos); },
                                 7 => { maze.map[y][x].neighbours.bot = Some(n_pos); },
@@ -186,7 +185,7 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         if let Mode::ComputerStep = config.mode {
             while walls.len() != 0 {
                 walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut maze);
+                maze.join_cells(&walls.pop().unwrap());
                 for (_, row) in maze.map.iter().enumerate() {
                     for (_, col) in row.iter().enumerate() {
                         print!("{}", col);
@@ -198,7 +197,7 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         } else {
             while walls.len() != 0 {
                 walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut maze);
+                maze.join_cells(&walls.pop().unwrap());
             }
 
             match config.mode {
