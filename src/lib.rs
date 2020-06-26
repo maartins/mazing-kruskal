@@ -1,5 +1,6 @@
 mod maze_cell;
 
+use std::convert::TryInto;
 use std::error::Error;
 use rand::seq::SliceRandom;
 use std::io;
@@ -62,35 +63,59 @@ pub enum Mode {
     Print
 }
 
-fn is_in_bounds(cell: &maze_cell::Pos, length: isize) -> bool {
-    (cell.y >= 0 && cell.y <= length - 1) && (cell.x >= 0 && cell.x <= length - 1)
+#[derive(Clone, Debug)]
+pub struct Maze {
+    pub map: Vec<Vec<maze_cell::Cell>>
 }
 
-fn join_cells(wall: &maze_cell::Cell, map: &mut Vec<Vec<maze_cell::Cell>>) {
-    let top_pos = wall.get_top_pos();
-    let bottom_pos =  wall.get_bottom_pos();
-    let right_pos = wall.get_right_pos();
-    let left_pos = wall.get_left_pos();
+impl Maze {
+    pub fn new(size: usize) -> Maze {
+        Maze {
+            map: vec![vec![maze_cell::Cell::new(0, 0, GROUND, 0); size]; size]
+        }
+    }
 
-    join_sides(&top_pos, &wall.pos, &bottom_pos, map);
-    join_sides(&left_pos, &wall.pos, &right_pos, map);
+    pub fn get_cell(&self, pos: &maze_cell::Pos) -> maze_cell::Cell {
+        return self.map[pos.y as usize][pos.x as usize].clone();
+    }
+
+    pub fn set_cell(&mut self, pos: &maze_cell::Pos, cell: &maze_cell::Cell) {
+        self.map[pos.y as usize][pos.x as usize].id = cell.id;
+        self.map[pos.y as usize][pos.x as usize].cell_type = cell.cell_type;
+    }
 }
 
-fn join_sides(side: &maze_cell::Pos, center: &maze_cell::Pos, opposite: &maze_cell::Pos, map: &mut Vec<Vec<maze_cell::Cell>>) {
-    if is_in_bounds(&side, map.len() as isize) && is_in_bounds(&opposite, map.len() as isize) {
-        let new_id = map[side.y as usize][side.x as usize].id;
-        let old_id = map[opposite.y as usize][opposite.x as usize].id;
-        if old_id != new_id && old_id != 0 && new_id != 0 {
-            map[center.y as usize][center.x as usize].id = new_id;
-            map[center.y as usize][center.x as usize].cell_type = GROUND;
-            map[opposite.y as usize][opposite.x as usize].id = new_id;
+fn join_cells(wall: &maze_cell::Cell, maze: &mut Maze) {
+    if wall.is_verticaly_bound() {
+        let top = &maze.get_cell(wall.get_top_pos());
+        let bottom = &maze.get_cell(wall.get_bot_pos());
+        join_sides(top, wall, bottom, maze);
+    }
+    if wall.is_horizontaly_bound() {
+        let left = &maze.get_cell(wall.get_left_pos());
+        let right = &maze.get_cell(wall.get_right_pos());
+        join_sides(left, wall, right, maze);
+    }
+}
 
-            for row in map.iter_mut() {
-                for cell in row.iter_mut() {
-                    if cell.id == old_id {
-                        cell.id = new_id;
-                    }
-                }
+/*
+*  ---->
+*  side | center | opposite
+*  
+*  | side
+*  | ---
+*  ▼ center
+*    ---
+*    opposite
+*/
+fn join_sides(side: &maze_cell::Cell, center: &maze_cell::Cell, opposite: &maze_cell::Cell, maze: &mut Maze) {
+    if opposite.id != side.id && opposite.cell_type != WALL && side.cell_type != WALL {
+        maze.set_cell(&center.pos, &side);
+        maze.set_cell(&opposite.pos, &side);
+
+        for cell in maze.map.iter_mut().flat_map(|r| r.iter_mut()) {
+            if cell.id == opposite.id {
+                cell.id = side.id;
             }
         }
     }
@@ -116,19 +141,42 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
 
     let start_time = Instant::now();
     for _ in 0..config.count {
-        let mut map = vec![vec![maze_cell::Cell::new(0, 0, GROUND, 0); config.size]; config.size];
+        let mut maze = Maze::new(config.size);
         let mut walls = Vec::new();
 
-        let mut counter: usize = 1;
-        for y in 0..map.len() {
-            for x in 0..map.len() {
-                map[y][x].pos = maze_cell::Pos{x: x as isize, y: y as isize};
+        let map_size: isize = maze.map.len().try_into().unwrap();
 
+        let mut counter: usize = 1;
+        for y in 0..maze.map.len() {
+            for x in 0..maze.map.len() {
+                maze.map[y][x].pos = maze_cell::Pos{x: x as isize, y: y as isize};
+
+                /*
+                *  0 1 2
+                *  3 4 5
+                *  6 7 8
+                */
+                for dir in 0..8 {
+                    if dir == 1 || dir == 3 || dir == 5 || dir == 7 {
+                        let n_pos = maze_cell::Pos{x: x as isize + (dir % 3) - 1, y: y as isize + (dir / 3) - 1};
+        
+                        if n_pos.x >= 0 && n_pos.x < map_size && n_pos.y >= 0 && n_pos.y < map_size {
+                            match dir {
+                                1 => { maze.map[y][x].neighbours.top = Some(n_pos); },
+                                7 => { maze.map[y][x].neighbours.bot = Some(n_pos); },
+                                3 => { maze.map[y][x].neighbours.left = Some(n_pos); },
+                                5 => { maze.map[y][x].neighbours.right = Some(n_pos); },
+                                _ => {}
+                            }
+                        }
+                    } 
+                }
+                
                 if x & 1 == 1 || y & 1 == 1 {
-                    map[y][x].cell_type = WALL;
-                    walls.push(map[y][x].clone());
+                    maze.map[y][x].cell_type = WALL;
+                    walls.push(maze.map[y][x].clone());
                 } else {
-                    map[y][x].id = counter;
+                    maze.map[y][x].id = counter;
                 }
 
                 counter += 1;
@@ -138,8 +186,8 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         if let Mode::ComputerStep = config.mode {
             while walls.len() != 0 {
                 walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut map);
-                for (_, row) in map.iter().enumerate() {
+                join_cells(&walls.pop().unwrap(), &mut maze);
+                for (_, row) in maze.map.iter().enumerate() {
                     for (_, col) in row.iter().enumerate() {
                         print!("{}", col);
                     }
@@ -150,12 +198,12 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
         } else {
             while walls.len() != 0 {
                 walls.shuffle(&mut rand::thread_rng());
-                join_cells(&walls.pop().unwrap(), &mut map);
+                join_cells(&walls.pop().unwrap(), &mut maze);
             }
 
             match config.mode {
                 Mode::Verbose => {
-                    for (_, row) in map.iter().enumerate() {
+                    for (_, row) in maze.map.iter().enumerate() {
                         for (_, col) in row.iter().enumerate() {
                             print!("{}", col);
                         }
@@ -163,7 +211,7 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
                     }
                 },
                 Mode::Computer => {
-                    for (_, row) in map.iter().enumerate() {
+                    for (_, row) in maze.map.iter().enumerate() {
                         for (_, col) in row.iter().enumerate() {
                             print!("{}", col);
                         }
@@ -174,7 +222,7 @@ pub fn run (config: Config) -> Result<(), Box<dyn Error>> {
                 Mode::Print => {
                     let mut file = OpenOptions::new().write(true).append(true).open("mazes.txt").unwrap();
             
-                    for (_, row) in map.iter().enumerate() {
+                    for (_, row) in maze.map.iter().enumerate() {
                         for (_, col) in row.iter().enumerate() {
                             write!(file, "{}", col.cell_type)?;
                         }

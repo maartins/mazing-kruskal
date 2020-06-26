@@ -18,24 +18,28 @@ impl Cell {
         }
     }
 
-    pub fn get_top_pos(&self) -> Pos {
-        Pos{x: self.pos.x, y: self.pos.y - 1}
+    pub fn get_top_pos(&self) -> &Pos {
+        self.neighbours.top.as_ref().unwrap()
     }
 
-    pub fn get_bottom_pos(&self) -> Pos {
-        Pos{x: self.pos.x, y: self.pos.y + 1}
+    pub fn get_bot_pos(&self) -> &Pos {
+        self.neighbours.bot.as_ref().unwrap()
     }
 
-    pub fn get_right_pos(&self) -> Pos {
-        Pos{x: self.pos.x + 1, y: self.pos.y}
+    pub fn get_left_pos(&self) -> &Pos {
+        self.neighbours.left.as_ref().unwrap()
     }
 
-    pub fn get_left_pos(&self) -> Pos {
-        Pos{x: self.pos.x - 1, y: self.pos.y}
+    pub fn get_right_pos(&self) -> &Pos {
+        self.neighbours.right.as_ref().unwrap()
     }
 
-    pub fn is_in_bounds(&self, map_size: isize) -> bool {
-        (self.pos.y >= 0 && self.pos.y <= map_size - 1) && (self.pos.x >= 0 && self.pos.x <= map_size - 1)
+    pub fn is_verticaly_bound(&self) -> bool {
+        self.neighbours.top != None && self.neighbours.bot != None
+    }
+
+    pub fn is_horizontaly_bound(&self) -> bool {
+        self.neighbours.left != None && self.neighbours.right != None
     }
 }
 
@@ -45,7 +49,7 @@ impl fmt::Display for Cell {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Pos {
     pub x: isize,
     pub y: isize
@@ -53,10 +57,10 @@ pub struct Pos {
 
 #[derive(Clone, Debug)]
 pub struct Neighbours {
-    pub top: Option<Box<Cell>>,
-    pub bot: Option<Box<Cell>>,
-    pub left: Option<Box<Cell>>,
-    pub right: Option<Box<Cell>>
+    pub top: Option<Pos>,
+    pub bot: Option<Pos>,
+    pub left: Option<Pos>,
+    pub right: Option<Pos>
 }
 
 impl Neighbours {
@@ -67,9 +71,5 @@ impl Neighbours {
             left: None,
             right: None
         }
-    }
-
-    pub fn count(&self) -> u8 {
-        return 9;
     }
 }
